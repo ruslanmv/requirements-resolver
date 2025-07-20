@@ -18,10 +18,6 @@
   </a>
   <a href="https://coveralls.io/github/ruslanmv/requirements-resolver?branch=master">
     <img alt="Coverage Status" src="https://coveralls.io/repos/github/ruslanmv/requirements-resolver/badge.svg?branch=master">
-  </a>
-  <a href="https://pepy.tech/project/requirements-resolver">
-    <img alt="PyPI Downloads" src="https://pepy.tech/badge/requirements-resolver">
-  </a>
   <a href="https://requirements-resolver.readthedocs.io/en/latest/">
     <img alt="Read the Docs" src="https://readthedocs.org/projects/requirements-resolver/badge/?version=latest">
   </a>
