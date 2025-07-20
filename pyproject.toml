@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "requirements-resolver"
+version = "0.1.0"
+authors = [
+  { name="Ruslan Magana Vsevolodovna", email="contact@ruslanmv.com" },
+]
+description = "A tool to resolve requirements conflicts between n requirements files."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Build Tools",
+    "Environment :: X11 Applications :: GTK",
+]
+dependencies = [
+    "requests",
+    "packaging",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8",
+]
+
+[project.urls]
+"Homepage" = "https://ruslanmv.com"
+"Repository" = "https://github.com/ruslanmv/requirements-resolver"
+"Bug Tracker" = "https://github.com/ruslanmv/requirements-resolver/issues"
+
+[project.scripts]
+requirements-resolver = "requirements_resolver.main:main"

@@ -1,0 +1,50 @@
+name: Python CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.8, 3.9, 3.10, 3.11]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+
+      - name: Install dependencies
+        run: make setup
+
+      - name: Lint with flake8
+        run: make lint
+
+      - name: Run tests
+        run: |
+          # If your Makefile already created a venv in ./venv, use it:
+          if [ -d venv ]; then
+            ./venv/bin/python -m unittest discover tests
+          else
+            # fallback to system/python from setup-python
+            python -m unittest discover tests
+          fi
