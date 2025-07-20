@@ -53,6 +53,9 @@ class TestRequirementsResolver(unittest.TestCase):
         backend = Backend()
         # A queue to capture logs/messages from the backend
         log_queue = queue.Queue()
+        # Get the current python version dynamically (e.g., "3.11", "3.12")
+        current_python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+
 
         # --- 2. Execution ---
         # Run the main function from the backend
@@ -60,7 +63,7 @@ class TestRequirementsResolver(unittest.TestCase):
             files=[str(self.reqs1_path)],
             log_queue=log_queue,
             output_file=str(self.output_path),
-            python_version="3.11",  # Specify a python version for consistency
+            python_version=current_python_version,  # Use the current Python version
         )
 
         # --- 3. Verification ---
@@ -83,9 +86,9 @@ class TestRequirementsResolver(unittest.TestCase):
             "Resolved version of 'packaging' not found in output.",
         )
 
-        print("\n--- Test Output ---")
+        print(f"\n--- Test Output (Python {current_python_version}) ---")
         print(content)
-        print("-------------------")
+        print("---------------------------------")
 
 
 if __name__ == "__main__":
