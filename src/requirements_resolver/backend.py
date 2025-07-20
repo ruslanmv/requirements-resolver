@@ -3,13 +3,13 @@
 import json
 import os
 import re
+import shutil  # --- ADDED: For deleting directories ---
 import subprocess
 import sys
 from pathlib import Path
 
 import requests
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
-# --- FIX: Import InvalidVersion to handle non-standard version strings ---
 from packaging.version import InvalidVersion, parse
 
 
@@ -26,12 +26,23 @@ class Backend:
         self.cache_dir.mkdir(exist_ok=True)
         self.session = requests.Session()
 
+    # --- NEW: Method to clean the test environment ---
+    def clean_test_environment(self, log_queue, python_version=None):
+        """Removes the temporary virtual environment directory."""
+        venv_dir = self.cache_dir / f"test_env_py{python_version or 'default'}"
+        log_queue.put(f"Attempting to clean environment: {venv_dir}")
+        if venv_dir.exists():
+            try:
+                shutil.rmtree(venv_dir)
+                log_queue.put(f"✅ Successfully removed {venv_dir}")
+            except OSError as e:
+                log_queue.put(f"❌ Error removing environment: {e}")
+        else:
+            log_queue.put("No test environment found to clean.")
+
     def parse_requirements(self, file_path):
         """
         Parses a requirements.txt file.
-        It handles multiple specifiers for the same package within the file by
-        intersecting them.
-        Returns a dictionary mapping package names to a combined SpecifierSet.
         """
         dependencies = {}
         try:
@@ -41,8 +52,6 @@ class Backend:
                     if not line_without_comments:
                         continue
 
-                    # --- FIX: Use a more specific regex to avoid parsing invalid lines ---
-                    # This ensures the line starts with a package name and optionally has specifiers.
                     match = re.match(
                         r"^([a-zA-Z0-9_.-]+)((?:[<>=!~].*)?)$", line_without_comments
                     )
@@ -53,7 +62,6 @@ class Backend:
                         try:
                             new_spec = SpecifierSet(specifier_str)
                             if name in dependencies:
-                                # If package already seen, intersect the specifiers
                                 dependencies[name] &= new_spec
                             else:
                                 dependencies[name] = new_spec
@@ -83,7 +91,7 @@ class Backend:
                 with open(cache_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except (json.JSONDecodeError, IOError):
-                pass  # Cache is corrupt, will refetch
+                pass
 
         try:
             response = self.session.get(f"https://pypi.org/pypi/{package_name}/json")
@@ -93,13 +101,12 @@ class Backend:
             for version, dists in data.get("releases", {}).items():
                 if not dists:
                     continue
-                # Prioritize wheels for 'requires_python'
                 wheel_dist = next(
                     (d for d in dists if d.get("packagetype") == "bdist_wheel"), None
                 )
                 if wheel_dist and wheel_dist.get("requires_python"):
                     version_info[version] = wheel_dist.get("requires_python")
-                else:  # Fallback to first dist's requires_python
+                else:
                     version_info[version] = dists[0].get("requires_python")
 
             with open(cache_file, "w", encoding="utf-8") as f:
@@ -112,8 +119,7 @@ class Backend:
         self, package_name, combined_specifiers, python_version=None
     ):
         """
-        Finds the latest version of a package that satisfies a combined SpecifierSet
-        and an optional Python version.
+        Finds the latest version of a package that satisfies a combined SpecifierSet.
         """
         package_info = self.get_package_info(package_name)
         compatible_versions = []
@@ -123,20 +129,16 @@ class Backend:
                 version = parse(v_str)
                 if version.is_prerelease:
                     continue
-
                 if not combined_specifiers.contains(version):
                     continue
-
                 if python_version and requires_python_spec_str:
                     if not SpecifierSet(requires_python_spec_str).contains(
                         python_version
                     ):
                         continue
-
                 compatible_versions.append(version)
-            # --- FIX: Catch InvalidVersion to prevent crashes on non-standard versions from PyPI ---
             except (InvalidSpecifier, TypeError, InvalidVersion):
-                continue  # Ignore invalid version or specifier strings from PyPI
+                continue
 
         return max(compatible_versions) if compatible_versions else None
 
@@ -159,27 +161,30 @@ class Backend:
 
         try:
             subprocess.run(
-                [python_executable, "--version"], check=True, capture_output=True
+                [python_executable, "--version"],
+                check=True,
+                capture_output=True,
+                text=True,
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
-            log_queue.put(
-                f"ERROR: Python interpreter '{python_executable}' not found in PATH."
-            )
+            log_queue.put(f"ERROR: Python interpreter '{python_executable}' not found.")
             return False
 
+        # The --clear flag ensures the environment is clean for each run.
         subprocess.run(
             [python_executable, "-m", "venv", str(venv_dir), "--clear"],
             check=True,
             capture_output=True,
         )
 
-        # Platform-independent path to pip executable
         if sys.platform == "win32":
             pip_executable = str(venv_dir / "Scripts" / "pip.exe")
         else:
             pip_executable = str(venv_dir / "bin" / "pip")
 
-        log_queue.put("STATUS: Installing resolved dependencies...")
+        log_queue.put(
+            "STATUS: Installing resolved dependencies into test environment..."
+        )
         for package, version in requirements.items():
             install_command = [pip_executable, "install", f"{package}=={version}"]
             try:
@@ -190,14 +195,14 @@ class Backend:
                     text=True,
                     encoding="utf-8",
                 )
-                log_queue.put(f"Successfully installed {package}=={version}")
+                log_queue.put(f"  ✅ Successfully installed {package}=={version}")
             except subprocess.CalledProcessError as e:
-                log_queue.put(f"ERROR: Failed to install {package}=={version}")
-                log_queue.put(e.stderr)
+                log_queue.put(f"❌ ERROR: Failed to install {package}=={version}")
+                log_queue.put(f"  DETAILS: {e.stderr}")
                 return False
 
         log_queue.put(
-            "All dependencies installed successfully in the test environment."
+            "✅ All dependencies installed successfully in the test environment."
         )
         return True
 
@@ -207,12 +212,12 @@ class Backend:
         log_queue,
         output_file="requirements.merged.txt",
         python_version=None,
+        install_in_env=True,  # --- ADDED: Flag for optional installation ---
     ):
         """
         The main function to resolve dependencies between multiple files.
         """
         try:
-            # Aggregate all requirements, intersecting specifiers for the same package
             all_reqs = {}
             for file_path in files:
                 log_queue.put(f"Parsing {os.path.basename(file_path)}...")
@@ -230,10 +235,9 @@ class Backend:
                 f"STATUS: Resolving conflicts for Python {python_version or 'system default'}..."
             )
 
-            # If no requirements are found after parsing, it's an error condition.
             if not all_reqs:
                 log_queue.put(
-                    "ERROR: No requirements were parsed from the provided files. Please check the file paths and contents."
+                    "ERROR: No requirements were parsed from the provided files."
                 )
                 log_queue.put(
                     ("RESOLUTION_COMPLETE", "Resolution failed: No requirements found.")
@@ -242,11 +246,9 @@ class Backend:
 
             for package, specifiers in sorted(all_reqs.items()):
                 log_queue.put(f"Resolving {package} ({specifiers or 'any version'})...")
-
                 compatible_version = self.find_compatible_version(
                     package, specifiers, python_version
                 )
-
                 if compatible_version:
                     resolved_reqs[package] = str(compatible_version)
                     log_queue.put(
@@ -265,19 +267,31 @@ class Backend:
                 )
                 return
 
-            if self.test_environment(resolved_reqs, log_queue, python_version):
+            # --- MODIFIED: Logic to handle optional installation ---
+            if install_in_env:
+                log_queue.put("\n--- Starting Environment Test ---")
+                if self.test_environment(resolved_reqs, log_queue, python_version):
+                    is_success = True
+                    final_message = (
+                        "Resolution successful and validated in test environment!"
+                    )
+                else:
+                    is_success = False
+                    final_message = "Resolution failed during environment test."
+            else:
+                log_queue.put("\nSkipping environment test as requested.")
+                is_success = True
+                final_message = "Resolution successful!"
+
+            if is_success:
                 with open(output_file, "w", encoding="utf-8") as f:
                     for package, version in resolved_reqs.items():
                         f.write(f"{package}=={version}\n")
                 log_queue.put(f"\nSuccessfully created '{output_file}'")
-                log_queue.put(("RESOLUTION_COMPLETE", "Resolution successful!"))
-            else:
-                log_queue.put(
-                    "\nRequirements installation failed in the test environment."
-                )
-                log_queue.put(
-                    ("RESOLUTION_COMPLETE", "Resolution failed during testing.")
-                )
+                # --- ADD THIS LINE to send data to the UI ---
+                log_queue.put(("RESOLUTION_DATA", resolved_reqs))
+
+            log_queue.put(("RESOLUTION_COMPLETE", final_message))
 
         except FileNotFoundError as e:
             log_queue.put(f"ERROR: File not found - {e.filename}")
