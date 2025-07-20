@@ -7,7 +7,7 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 SRC_DIR := src/requirements_resolver
 
 # Phony targets are not associated with files.
-.PHONY: all help setup reinstall run lint format clean _ensure_venv _install
+.PHONY: all help setup reinstall run lint format test clean _ensure_venv _install
 
 # Default target executed when you just run `make`
 all: help
@@ -22,6 +22,7 @@ help:
 	@echo "  make run        - Runs the application."
 	@echo "  make lint       - Runs the linter."
 	@echo "  make format     - Automatically formats the code."
+	@echo "  make test       - Runs the test suite."
 	@echo "  make clean      - Removes the virtual environment and other generated files."
 	@echo "  make help       - Shows this help message."
 
@@ -93,6 +94,12 @@ format: _ensure_venv
 	black $(SRC_DIR); \
 	isort $(SRC_DIR); \
 	autoflake --in-place --remove-all-unused-imports --recursive $(SRC_DIR)
+
+# Target to run the test suite
+test: _ensure_venv
+	@echo "--- Running tests ---"
+	. $(VENV_DIR)/bin/activate; \
+	python -m unittest discover tests
 
 # Target to clean up the project directory
 clean:
