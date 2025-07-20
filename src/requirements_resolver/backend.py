@@ -123,27 +123,51 @@ class Backend:
                 version = parse(v_str)
                 if version.is_prerelease or not specifier_set.contains(version):
                     continue
-                if python_version and req_py and not SpecifierSet(req_py).contains(python_version):
+                if (
+                    python_version
+                    and req_py
+                    and not SpecifierSet(req_py).contains(python_version)
+                ):
                     continue
                 compatible.append(version)
             except (InvalidSpecifier, TypeError, InvalidVersion):
                 continue
         return sorted(compatible, reverse=True)
 
-    def _test_and_write_file(self, requirements, log_queue, output_file, python_version, install_in_env):
+    def _test_and_write_file(
+        self, requirements, log_queue, output_file, python_version, install_in_env
+    ):
         """Creates a venv, optionally tests installation, and writes the final file."""
         if install_in_env:
             venv_dir = self.cache_dir / f"test_env_py{python_version or 'default'}"
             log_queue.put(f"STATUS: Creating test environment in {venv_dir}...")
             py_exe = f"python{python_version}" if python_version else sys.executable
             try:
-                subprocess.run([py_exe, "-m", "venv", str(venv_dir), "--clear"], check=True, capture_output=True)
-                pip_exe = str(venv_dir / "Scripts" / "pip") if sys.platform == "win32" else str(venv_dir / "bin" / "pip")
+                subprocess.run(
+                    [py_exe, "-m", "venv", str(venv_dir), "--clear"],
+                    check=True,
+                    capture_output=True,
+                )
+                pip_exe = (
+                    str(venv_dir / "Scripts" / "pip")
+                    if sys.platform == "win32"
+                    else str(venv_dir / "bin" / "pip")
+                )
                 for pkg, ver in requirements.items():
-                    subprocess.run([pip_exe, "install", f"{pkg}=={ver}"], check=True, capture_output=True, text=True, encoding="utf-8")
-                log_queue.put("✅ All dependencies installed successfully in the test environment.")
+                    subprocess.run(
+                        [pip_exe, "install", f"{pkg}=={ver}"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
+                log_queue.put(
+                    "✅ All dependencies installed successfully in the test environment."
+                )
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                log_queue.put(f"❌ Test environment installation failed: {getattr(e, 'stderr', e)}")
+                log_queue.put(
+                    f"❌ Test environment installation failed: {getattr(e, 'stderr', e)}"
+                )
                 return False
 
         with open(output_file, "w", encoding="utf-8") as f:
@@ -158,7 +182,9 @@ class Backend:
         resolved, conflicts = {}, []
         for package, specifiers in sorted(all_reqs.items()):
             log_queue.put(f"Resolving {package} ({specifiers or 'any version'})...")
-            compatible_versions = self._get_compatible_versions(package, specifiers, python_version)
+            compatible_versions = self._get_compatible_versions(
+                package, specifiers, python_version
+            )
             if compatible_versions:
                 resolved[package] = str(compatible_versions[0])
                 log_queue.put(f"  ✅ Picked latest: {resolved[package]}")
@@ -174,7 +200,7 @@ class Backend:
             pkg: self._get_compatible_versions(pkg, specs, python_version)
             for pkg, specs in all_reqs.items()
         }
-        
+
         # Filter out packages with no compatible versions from the start
         if any(not versions for versions in candidates.values()):
             conflicts = [pkg for pkg, versions in candidates.items() if not versions]
@@ -186,7 +212,7 @@ class Backend:
         def dfs(index):
             if index == len(packages_to_resolve):
                 return True  # Found a full valid solution
-            
+
             package = packages_to_resolve[index]
             log_queue.put(f"Searching for {package}...")
             for version in candidates[package]:
@@ -196,7 +222,7 @@ class Backend:
                 if dfs(index + 1):
                     log_queue.put(f"  ✅ Tentatively selected {package}=={version}")
                     return True
-            
+
             solution.pop(package, None)
             log_queue.put(f"  ❌ Backtracking from {package}, no valid path found.")
             return False
@@ -214,21 +240,41 @@ class Backend:
             venv_dir = self.cache_dir / f"iso_env_{Path(req_file).stem}"
             py_exe = f"python{python_version}" if python_version else sys.executable
             try:
-                subprocess.run([py_exe, "-m", "venv", str(venv_dir), "--clear"], check=True, capture_output=True)
-                pip_exe = str(venv_dir / "Scripts" / "pip") if sys.platform == "win32" else str(venv_dir / "bin" / "pip")
-                subprocess.run([pip_exe, "install", "-r", req_file], check=True, capture_output=True, text=True, encoding="utf-8")
-                log_queue.put(f"✅ Success: Environment for {file_name} created and installed.")
+                subprocess.run(
+                    [py_exe, "-m", "venv", str(venv_dir), "--clear"],
+                    check=True,
+                    capture_output=True,
+                )
+                pip_exe = (
+                    str(venv_dir / "Scripts" / "pip")
+                    if sys.platform == "win32"
+                    else str(venv_dir / "bin" / "pip")
+                )
+                subprocess.run(
+                    [pip_exe, "install", "-r", req_file],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                )
+                log_queue.put(
+                    f"✅ Success: Environment for {file_name} created and installed."
+                )
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                log_queue.put(f"❌ Failed to create/install env for {file_name}: {getattr(e, 'stderr', e)}")
+                log_queue.put(
+                    f"❌ Failed to create/install env for {file_name}: {getattr(e, 'stderr', e)}"
+                )
                 failures.append(file_name)
         return {}, failures
 
     # --- Algorithm 4: PEX Bundle ---
     def _resolve_pex(self, files, log_queue, python_version, **kwargs):
         if not shutil.which("pex"):
-            log_queue.put("ERROR: 'pex' executable not found in PATH. Please run `pip install pex`.")
+            log_queue.put(
+                "ERROR: 'pex' executable not found in PATH. Please run `pip install pex`."
+            )
             return {}, ["'pex' not installed"]
-        
+
         wheelhouse = self.cache_dir / "pex_wheelhouse"
         shutil.rmtree(wheelhouse, ignore_errors=True)
         wheelhouse.mkdir()
@@ -239,22 +285,48 @@ class Backend:
             for fname in files:
                 with open(fname) as infile:
                     outfile.write(infile.read())
-        
+
         try:
             # Create a wheelhouse from all requirements at once
-            subprocess.run([sys.executable, "-m", "pip", "wheel", "-r", str(combined_reqs_path), "-w", str(wheelhouse)], check=True, capture_output=True, text=True, encoding="utf-8")
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "wheel",
+                    "-r",
+                    str(combined_reqs_path),
+                    "-w",
+                    str(wheelhouse),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
         except subprocess.CalledProcessError as e:
             log_queue.put(f"❌ Failed to build wheels: {e.stderr}")
             return {}, ["Wheel build failed"]
 
         pex_file = Path("agentic.pex")
-        cmd = ["pex", "--resolver-version=pip-2020-resolver", f"--wheel-dir={wheelhouse}", "-r", str(combined_reqs_path), "-o", str(pex_file), "--no-build"]
+        cmd = [
+            "pex",
+            "--resolver-version=pip-2020-resolver",
+            f"--wheel-dir={wheelhouse}",
+            "-r",
+            str(combined_reqs_path),
+            "-o",
+            str(pex_file),
+            "--no-build",
+        ]
         if python_version:
             cmd.extend(["--python", f"python{python_version}"])
 
         log_queue.put(f"Creating PEX bundle at {pex_file}...")
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+            subprocess.run(
+                cmd, check=True, capture_output=True, text=True, encoding="utf-8"
+            )
             log_queue.put(f"✅ PEX bundle created successfully: {pex_file}")
             return {}, []
         except subprocess.CalledProcessError as e:
@@ -267,7 +339,9 @@ class Backend:
             log_queue.put("ERROR: 'conda' executable not found in PATH.")
             return {}, ["'conda' not installed"]
         if not yaml:
-            log_queue.put("ERROR: 'PyYAML' is required. Please run `pip install pyyaml`.")
+            log_queue.put(
+                "ERROR: 'PyYAML' is required. Please run `pip install pyyaml`."
+            )
             return {}, ["'PyYAML' not installed"]
 
         log_queue.put("Aggregating dependencies for Conda...")
@@ -280,20 +354,30 @@ class Backend:
                         # Convert pip's == to conda's = for version pinning
                         all_deps.append(line.replace("==", "="))
 
-        env_data = {"name": "resolver-conda-env", "dependencies": ["pip", *sorted(list(set(all_deps)))]}
+        env_data = {
+            "name": "resolver-conda-env",
+            "dependencies": ["pip", *sorted(list(set(all_deps)))],
+        }
         if python_version:
             env_data["dependencies"].insert(0, f"python={python_version}")
-            
-        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".yml", encoding="utf-8") as f:
+
+        with tempfile.NamedTemporaryFile(
+            "w", delete=False, suffix=".yml", encoding="utf-8"
+        ) as f:
             yaml.dump(env_data, f, default_flow_style=False)
             env_file_path = f.name
-        
+
         log_queue.put(f"Attempting to resolve with Conda (dry-run)...")
         try:
             # Use --dry-run and --json to get solver output without creating the env
-            result = subprocess.run(["conda", "env", "create", "-f", env_file_path, "--dry-run", "--json"], capture_output=True, text=True, encoding="utf-8")
+            result = subprocess.run(
+                ["conda", "env", "create", "-f", env_file_path, "--dry-run", "--json"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
             os.unlink(env_file_path)  # Clean up temp file
-            
+
             data = json.loads(result.stdout)
             if data.get("success"):
                 log_queue.put("✅ Conda SAT solver succeeded.")
@@ -302,7 +386,11 @@ class Backend:
                 conflicts = data.get("error", "Unknown Conda error.")
                 log_queue.put(f"❌ Conda resolution failed: {conflicts}")
                 return {}, [str(conflicts)]
-        except (FileNotFoundError, json.JSONDecodeError, subprocess.CalledProcessError) as e:
+        except (
+            FileNotFoundError,
+            json.JSONDecodeError,
+            subprocess.CalledProcessError,
+        ) as e:
             os.unlink(env_file_path)
             log_queue.put(f"❌ Conda failed with an error: {e}")
             return {}, ["Conda process failed"]
@@ -318,7 +406,7 @@ class Backend:
         install_in_env=True,
     ):
         """Public method to dispatch to the chosen resolution strategy."""
-        
+
         strategies = {
             Algorithm.GREEDY: self._resolve_greedy,
             Algorithm.BACKTRACKING: self._resolve_backtracking,
@@ -328,34 +416,49 @@ class Backend:
         }
 
         log_queue.put(f"--- Starting resolution with algorithm: {algorithm} ---")
-        
+
         try:
             resolver_func = strategies[algorithm]
             resolved, conflicts = resolver_func(
                 files=files, log_queue=log_queue, python_version=python_version
             )
         except Exception as e:
-            log_queue.put(f"An unexpected error occurred in '{algorithm}' resolver: {e}")
-            log_queue.put(("RESOLUTION_COMPLETE", "Resolution failed with an unexpected error."))
+            log_queue.put(
+                f"An unexpected error occurred in '{algorithm}' resolver: {e}"
+            )
+            log_queue.put(
+                ("RESOLUTION_COMPLETE", "Resolution failed with an unexpected error.")
+            )
             return
 
         if conflicts:
             log_queue.put(f"\n❌ Conflicts found for: {', '.join(conflicts)}")
-            log_queue.put(("RESOLUTION_COMPLETE", "Resolution failed due to conflicts."))
+            log_queue.put(
+                ("RESOLUTION_COMPLETE", "Resolution failed due to conflicts.")
+            )
             return
 
         # Post-processing for algorithms that produce a single requirements file
         if algorithm in (Algorithm.GREEDY, Algorithm.BACKTRACKING):
             if not resolved:
                 log_queue.put("\n❌ Algorithm failed to find a valid set of packages.")
-                log_queue.put(("RESOLUTION_COMPLETE", "Resolution failed: No solution found."))
+                log_queue.put(
+                    ("RESOLUTION_COMPLETE", "Resolution failed: No solution found.")
+                )
                 return
 
-            if self._test_and_write_file(resolved, log_queue, output_file, python_version, install_in_env):
+            if self._test_and_write_file(
+                resolved, log_queue, output_file, python_version, install_in_env
+            ):
                 log_queue.put(("RESOLUTION_DATA", resolved))
                 log_queue.put(("RESOLUTION_COMPLETE", "Resolution successful!"))
             else:
-                log_queue.put(("RESOLUTION_COMPLETE", "Resolution succeeded, but test environment failed."))
+                log_queue.put(
+                    (
+                        "RESOLUTION_COMPLETE",
+                        "Resolution succeeded, but test environment failed.",
+                    )
+                )
             return
 
         # Success message for other algorithms that don't produce a file
