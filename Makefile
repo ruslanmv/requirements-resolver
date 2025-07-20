@@ -7,7 +7,7 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 SRC_DIR := src/requirements_resolver
 
 # Phony targets are not associated with files.
-.PHONY: all help setup reinstall run lint clean _ensure_venv
+.PHONY: all help setup reinstall run lint format clean _ensure_venv _install
 
 # Default target executed when you just run `make`
 all: help
@@ -17,12 +17,13 @@ help:
 	@echo "Makefile for the Requirements Resolver for Python"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make setup        - Creates or updates the virtual environment. Asks to reinstall if it exists."
-	@echo "  make reinstall    - Forces a clean re-installation of the environment."
-	@echo "  make run          - Runs the application (will prompt to run 'make setup' if not installed)."
-	@echo "  make lint         - Runs the linter (will prompt to run 'make setup' if not installed)."
-	@echo "  make clean        - Removes the virtual environment and other generated files."
-	@echo "  make help         - Shows this help message."
+	@echo "  make setup      - Creates or updates the virtual environment."
+	@echo "  make reinstall  - Forces a clean re-installation of the environment."
+	@echo "  make run        - Runs the application."
+	@echo "  make lint       - Runs the linter."
+	@echo "  make format     - Automatically formats the code."
+	@echo "  make clean      - Removes the virtual environment and other generated files."
+	@echo "  make help       - Shows this help message."
 
 # Target to set up the virtual environment and install dependencies.
 # If the environment exists, it will ask the user before reinstalling.
@@ -52,6 +53,7 @@ _install: pyproject.toml
 	@echo "--- Creating virtual environment in $(VENV_DIR) ---"
 	test -d "$(VENV_DIR)" || $(PYTHON) -m venv $(VENV_DIR)
 	@echo "--- Installing dependencies and project from pyproject.toml ---"
+	@echo "Note: Ensure black, isort, and autoflake are in your [dev] dependencies."
 	. $(VENV_DIR)/bin/activate; \
 	$(VENV_PYTHON) -m pip install --upgrade pip; \
 	$(VENV_PYTHON) -m pip install -e ".[dev]";
@@ -84,6 +86,14 @@ lint: _ensure_venv
 	@echo "--- Running linter (flake8) ---"
 	. $(VENV_DIR)/bin/activate; flake8 $(SRC_DIR)
 
+# Target to format the code automatically
+format: _ensure_venv
+	@echo "--- Formatting code with black, isort, and autoflake ---"
+	. $(VENV_DIR)/bin/activate; \
+	black $(SRC_DIR); \
+	isort $(SRC_DIR); \
+	autoflake --in-place --remove-all-unused-imports --recursive $(SRC_DIR)
+
 # Target to clean up the project directory
 clean:
 	@echo "--- Cleaning up ---"
@@ -94,5 +104,3 @@ clean:
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete
 	@echo "Cleanup complete."
-
-.PHONY: _install

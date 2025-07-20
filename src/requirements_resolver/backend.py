@@ -1,19 +1,22 @@
 # File: src/requirements_resolver/backend.py
 
+import json
 import os
 import re
-import sys
-import json
 import subprocess
+import sys
 from pathlib import Path
+
 import requests
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import parse
-from packaging.specifiers import SpecifierSet, InvalidSpecifier
+
 
 class Backend:
     """
     Handles the core logic for resolving requirements conflicts.
     """
+
     def __init__(self):
         """
         Initializes the backend, setting up a cache directory.
@@ -28,14 +31,14 @@ class Backend:
         correctly handling inline comments.
         """
         dependencies = {}
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             for line_num, line in enumerate(f, 1):
                 # Remove inline comments and strip whitespace before processing
-                line_without_comments = line.split('#', 1)[0].strip()
-                
+                line_without_comments = line.split("#", 1)[0].strip()
+
                 if line_without_comments:
                     # A more robust regex to handle various package name formats
-                    match = re.match(r'([a-zA-Z0-9_.-]+)(.*)', line_without_comments)
+                    match = re.match(r"([a-zA-Z0-9_.-]+)(.*)", line_without_comments)
                     if match:
                         name = match.group(1)
                         specifier = match.group(2).strip()
@@ -56,7 +59,7 @@ class Backend:
         """
         cache_file = self.cache_dir / f"{package_name}.json"
         if cache_file.exists():
-            with open(cache_file, 'r') as f:
+            with open(cache_file, "r") as f:
                 return json.load(f)
 
         try:
@@ -69,14 +72,16 @@ class Backend:
                 requires_python_spec = None
                 if dists:
                     # Find a wheel distribution if possible
-                    wheel_dists = [d for d in dists if d.get('packagetype') == 'bdist_wheel']
+                    wheel_dists = [
+                        d for d in dists if d.get("packagetype") == "bdist_wheel"
+                    ]
                     if wheel_dists:
-                        requires_python_spec = wheel_dists[0].get('requires_python')
-                    else: # Fallback to source distribution
-                        requires_python_spec = dists[0].get('requires_python')
+                        requires_python_spec = wheel_dists[0].get("requires_python")
+                    else:  # Fallback to source distribution
+                        requires_python_spec = dists[0].get("requires_python")
                 version_info[version] = requires_python_spec
 
-            with open(cache_file, 'w') as f:
+            with open(cache_file, "w") as f:
                 json.dump(version_info, f)
             return version_info
         except requests.RequestException:
@@ -88,7 +93,7 @@ class Backend:
         """
         package_info = self.get_package_info(package_name)
         compatible_versions = []
-        
+
         # Combine all specifiers for the package
         combined_spec = SpecifierSet("")
         for spec in specifiers:
@@ -104,7 +109,7 @@ class Backend:
                 if python_version and requires_python_spec:
                     if not SpecifierSet(requires_python_spec).contains(python_version):
                         continue
-                
+
                 compatible_versions.append(version)
             except Exception:
                 continue  # Ignore invalid version strings
@@ -117,37 +122,57 @@ class Backend:
         """
         venv_dir = self.cache_dir / f"test_env_py{python_version or 'default'}"
         log_queue.put(f"STATUS: Creating test environment in {venv_dir}...")
-        
+
         # Determine the python executable to use
-        python_executable = f"python{python_version}" if python_version else sys.executable
-        
+        python_executable = (
+            f"python{python_version}" if python_version else sys.executable
+        )
+
         try:
             # Ensure the python version exists
-            subprocess.run([python_executable, "--version"], check=True, capture_output=True)
+            subprocess.run(
+                [python_executable, "--version"], check=True, capture_output=True
+            )
         except (subprocess.CalledProcessError, FileNotFoundError):
-            log_queue.put(f"ERROR: Python interpreter '{python_executable}' not found in PATH.")
+            log_queue.put(
+                f"ERROR: Python interpreter '{python_executable}' not found in PATH."
+            )
             return False
 
         # Create the virtual environment using the specified python
-        subprocess.run([python_executable, "-m", "venv", venv_dir, "--clear"], check=True, capture_output=True)
+        subprocess.run(
+            [python_executable, "-m", "venv", venv_dir, "--clear"],
+            check=True,
+            capture_output=True,
+        )
 
         pip_executable = str(venv_dir / "bin" / "pip")
-        
+
         log_queue.put("STATUS: Installing resolved dependencies...")
         for package, version in requirements.items():
             install_command = [pip_executable, "install", f"{package}=={version}"]
             try:
-                subprocess.run(install_command, check=True, capture_output=True, text=True)
+                subprocess.run(
+                    install_command, check=True, capture_output=True, text=True
+                )
                 log_queue.put(f"Successfully installed {package}=={version}")
             except subprocess.CalledProcessError as e:
                 log_queue.put(f"ERROR: Failed to install {package}=={version}")
                 log_queue.put(e.stderr)
                 return False
-        
-        log_queue.put("All dependencies installed successfully in the test environment.")
+
+        log_queue.put(
+            "All dependencies installed successfully in the test environment."
+        )
         return True
 
-    def resolve_dependencies(self, files, log_queue, output_file="requirements.merged.txt", python_version=None):
+    def resolve_dependencies(
+        self,
+        files,
+        log_queue,
+        output_file="requirements.merged.txt",
+        python_version=None,
+    ):
         """
         The main function to resolve dependencies between multiple files for a specific Python version.
         """
@@ -164,33 +189,49 @@ class Backend:
             resolved_reqs = {}
             conflicts = []
 
-            log_queue.put(f"STATUS: Resolving conflicts for Python {python_version or 'system default'}...")
+            log_queue.put(
+                f"STATUS: Resolving conflicts for Python {python_version or 'system default'}..."
+            )
             for package, specifiers in sorted(all_reqs.items()):
-                log_queue.put(f"Resolving {package} ({', '.join(map(str, specifiers))})...")
-                
-                compatible_version = self.find_compatible_version(package, specifiers, python_version)
+                log_queue.put(
+                    f"Resolving {package} ({', '.join(map(str, specifiers))})..."
+                )
+
+                compatible_version = self.find_compatible_version(
+                    package, specifiers, python_version
+                )
 
                 if compatible_version:
                     resolved_reqs[package] = compatible_version
-                    log_queue.put(f"  ✅ Found compatible version for {package}: {compatible_version}")
+                    log_queue.put(
+                        f"  ✅ Found compatible version for {package}: {compatible_version}"
+                    )
                 else:
                     conflicts.append(package)
                     log_queue.put(f"  ❌ No compatible version found for {package}")
-            
+
             if conflicts:
-                log_queue.put(f"\nCould not resolve the following conflicts: {', '.join(conflicts)}")
-                log_queue.put(("RESOLUTION_COMPLETE", "Resolution failed due to conflicts."))
+                log_queue.put(
+                    f"\nCould not resolve the following conflicts: {', '.join(conflicts)}"
+                )
+                log_queue.put(
+                    ("RESOLUTION_COMPLETE", "Resolution failed due to conflicts.")
+                )
                 return
 
             if self.test_environment(resolved_reqs, log_queue, python_version):
-                with open(output_file, 'w') as f:
+                with open(output_file, "w") as f:
                     for package, version in resolved_reqs.items():
                         f.write(f"{package}=={version}\n")
                 log_queue.put(f"\nSuccessfully created '{output_file}'")
                 log_queue.put(("RESOLUTION_COMPLETE", "Resolution successful!"))
             else:
-                log_queue.put("\nrequirements installation failed in the test environment.")
-                log_queue.put(("RESOLUTION_COMPLETE", "Resolution failed during testing."))
+                log_queue.put(
+                    "\nrequirements installation failed in the test environment."
+                )
+                log_queue.put(
+                    ("RESOLUTION_COMPLETE", "Resolution failed during testing.")
+                )
 
         except FileNotFoundError as e:
             log_queue.put(f"ERROR: File not found - {e.filename}")
