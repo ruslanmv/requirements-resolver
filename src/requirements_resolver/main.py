@@ -107,8 +107,7 @@ def run_gui_mode(backend):
 def is_tkinter_installed():
     """Checks if the tkinter module is available."""
     try:
-        pass
-
+        import tkinter  # <-- Correct
         return True
     except ImportError:
         return False
