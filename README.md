@@ -61,7 +61,19 @@ cd requirements-resolver
 pip install .
 ```
 
----
+## Dependency Resolution Algorithms
+
+The Requirements Resolver offers several distinct algorithms to merge and resolve dependencies. Each strategy has unique strengths and is suited for different use cases, from quick checks to building robust, portable applications.
+
+The available algorithms are:
+
+  * **Greedy Latest-Compatible**: The default and fastest approach that selects the newest possible version for each package.
+  * **Version Range with Backtracking**: A thorough solver that intelligently searches for a combination of versions that work for all packages together.
+  * **Per-File Isolated Environments**: Validates each requirements file individually in its own separate virtual environment.
+  * **Wheelhouse + PEX Bundle**: Creates a single, portable executable (`.pex`) file containing all dependencies.
+  * **Conda-First Hybrid Resolution**: Uses the powerful Conda SAT solver to resolve complex dependencies, especially in scientific computing.
+
+For a detailed explanation of each algorithm, including workflow diagrams and use cases, please see the **[Algorithm Documentation](./docs/README.md)**.
 
 ## 🎬 Quickstart
 
