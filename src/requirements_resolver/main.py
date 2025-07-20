@@ -108,6 +108,7 @@ def is_tkinter_installed():
     """Checks if the tkinter module is available."""
     try:
         import tkinter  # noqa: F401
+
         return True
     except ImportError:
         return False
