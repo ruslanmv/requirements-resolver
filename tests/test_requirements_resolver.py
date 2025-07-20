@@ -1,5 +1,4 @@
 # File: tests/test_requirements_resolver.py
-
 import os
 import queue
 import tempfile
