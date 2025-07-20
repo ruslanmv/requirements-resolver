@@ -17,8 +17,8 @@ def main():
     # --- MODIFIED: Use RawTextHelpFormatter for better formatting and add a detailed epilog for examples ---
     parser = argparse.ArgumentParser(
         description="A tool to merge multiple requirements.txt files, resolve version conflicts, and create a single, unified file.\n\n"
-                    "It intelligently combines specifiers (e.g., package>=1.0 and package<2.0 become package>=1.0,<2.0)\n"
-                    "and finds the latest compatible version for each package from PyPI.",
+        "It intelligently combines specifiers (e.g., package>=1.0 and package<2.0 become package>=1.0,<2.0)\n"
+        "and finds the latest compatible version for each package from PyPI.",
         epilog="""
 Examples:
 --------------------------------------------------------------------------------
@@ -37,7 +37,7 @@ Examples:
 5. Combine all options:
    requirements-resolver -f app.txt test.txt -p 3.10 -o final_reqs.txt --no-test
 """,
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     # --- MODIFIED: Make the --files argument required in CLI mode and improve help text ---
     parser.add_argument(
@@ -64,7 +64,7 @@ Examples:
         "--no-test",
         dest="install_in_env",
         action="store_false",
-        help="Skip creating a test environment and installing packages. This is faster but\ndoes not verify if the packages can be installed together."
+        help="Skip creating a test environment and installing packages. This is faster but\ndoes not verify if the packages can be installed together.",
     )
 
     args = parser.parse_args()
@@ -100,7 +100,11 @@ def run_cli_mode(backend, args):
                     elif msg_type == "RESOLUTION_COMPLETE":
                         print(f"\n--- {data} ---")
                         # Check for failure to set exit code
-                        if "fail" in data.lower() or "error" in data.lower() or "conflict" in data.lower():
+                        if (
+                            "fail" in data.lower()
+                            or "error" in data.lower()
+                            or "conflict" in data.lower()
+                        ):
                             sys.exit(1)
                         break  # End the logger thread
                 else:
@@ -142,18 +146,30 @@ def run_gui_mode(backend):
             "\nThe graphical user interface requires the Tkinter library, which was not found.",
             file=sys.stderr,
         )
-        
+
         os_name = platform.system()
-        print("\nTo fix this, please install Tkinter for your operating system:", file=sys.stderr)
-        
+        print(
+            "\nTo fix this, please install Tkinter for your operating system:",
+            file=sys.stderr,
+        )
+
         if os_name == "Linux":
-            print("\n  - On Debian/Ubuntu: sudo apt-get install python3-tk", file=sys.stderr)
-            print("  - On Fedora/CentOS: sudo dnf install python3-tkinter", file=sys.stderr)
+            print(
+                "\n  - On Debian/Ubuntu: sudo apt-get install python3-tk",
+                file=sys.stderr,
+            )
+            print(
+                "  - On Fedora/CentOS: sudo dnf install python3-tkinter",
+                file=sys.stderr,
+            )
         elif os_name == "Darwin":  # macOS
             print("\n  - If you use Homebrew: brew install python-tk", file=sys.stderr)
         elif os_name == "Windows":
-            print("\n  - Re-run the Python installer, choose 'Modify', and ensure 'tcl/tk and IDLE' is checked.", file=sys.stderr)
-            
+            print(
+                "\n  - Re-run the Python installer, choose 'Modify', and ensure 'tcl/tk and IDLE' is checked.",
+                file=sys.stderr,
+            )
+
         print("\n-------------------------------------------------", file=sys.stderr)
         sys.exit(1)
 
