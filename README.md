@@ -10,14 +10,14 @@
   <a href="https://www.python.org/downloads/release/python-380/">
     <img alt="Python 3.8+" src="https://img.shields.io/badge/python-3.8%2B-blue.svg">
   </a>
-  <a href="https://github.com/ruslanmv/requirements-resolver/blob/main/LICENSE">
+  <a href="https://github.com/ruslanmv/requirements-resolver/blob/master/LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg">
   </a>
   <a href="https://github.com/ruslanmv/requirements-resolver/actions/workflows/ci.yml">
     <img alt="Build Status" src="https://github.com/ruslanmv/requirements-resolver/actions/workflows/ci.yml/badge.svg">
   </a>
-  <a href="https://coveralls.io/github/ruslanmv/requirements-resolver?branch=main">
-    <img alt="Coverage Status" src="https://coveralls.io/repos/github/ruslanmv/requirements-resolver/badge.svg?branch=main">
+  <a href="https://coveralls.io/github/ruslanmv/requirements-resolver?branch=master">
+    <img alt="Coverage Status" src="https://coveralls.io/repos/github/ruslanmv/requirements-resolver/badge.svg?branch=master">
   </a>
   <a href="https://pepy.tech/project/requirements-resolver">
     <img alt="PyPI Downloads" src="https://pepy.tech/badge/requirements-resolver">
