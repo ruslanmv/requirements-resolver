@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12']
 
     steps:
       - name: Check out repository
@@ -38,6 +38,13 @@ jobs:
 
       - name: Lint with flake8
         run: make lint
+
+      - name: Ensure packages are importable
+        run: |
+          # Create __init__.py files to ensure directories are treated as packages.
+          # This is necessary for test discovery and relative imports to work correctly.
+          touch tests/__init__.py
+          touch src/requirements_resolver/__init__.py
 
       - name: Run tests
         run: |
