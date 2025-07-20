@@ -1,11 +1,12 @@
 # File: src/requirements_resolver/main.py
 
 import argparse
+import platform
 import queue
 import sys
+import threading
 
 from .backend import Backend
-from .ui import RequirementsResolverUI
 
 
 def main():
@@ -50,6 +51,7 @@ def main():
 def run_cli_mode(backend, args):
     """Handles the application logic for command-line execution."""
     log_queue = queue.Queue()
+    main_thread = threading.current_thread()
 
     # Simple console logger
     def console_logger(q):
@@ -71,9 +73,6 @@ def run_cli_mode(backend, args):
             except Exception:
                 break
 
-    import threading
-
-    main_thread = threading.current_thread()
     logger_thread = threading.Thread(
         target=console_logger, args=(log_queue,), daemon=True
     )
@@ -89,29 +88,66 @@ def run_cli_mode(backend, args):
 
 
 def run_gui_mode(backend):
-    """Handles the application logic for GUI execution."""
-    if not is_tkinter_installed():
+    """
+    Handles the application logic for GUI execution.
+    Catches the ImportError if Tkinter is not installed and provides helpful instructions.
+    """
+    try:
+        # This dynamic import will fail if tkinter is not available
+        from .ui import RequirementsResolverUI
+
+        app = RequirementsResolverUI(backend)
+        app.mainloop()
+    except ImportError:
+        # If the import fails, provide detailed, OS-specific instructions.
+        print("--- GUI Error: Tkinter is not installed ---", file=sys.stderr)
         print(
-            "Error: Tkinter is not installed, which is required for the GUI.",
+            "\nThe graphical user interface requires the Tkinter library, which was not found in your Python installation.",
+            file=sys.stderr,
+        )
+
+        os_name = platform.system()
+
+        print(
+            "\nTo fix this, please install Tkinter for your operating system:",
+            file=sys.stderr,
+        )
+
+        if os_name == "Linux":
+            print(
+                "\n  - On Debian/Ubuntu: sudo apt-get install python3-tk",
+                file=sys.stderr,
+            )
+            print(
+                "  - On Fedora/CentOS: sudo dnf install python3-tkinter",
+                file=sys.stderr,
+            )
+            print("  - On Arch Linux:    sudo pacman -S tk", file=sys.stderr)
+        elif os_name == "Darwin":  # macOS
+            print(
+                "\n  - If you use Homebrew (recommended): brew install python-tk",
+                file=sys.stderr,
+            )
+            print(
+                "  - Alternatively, reinstall Python from python.org, ensuring 'Tcl/Tk support' is selected during installation.",
+                file=sys.stderr,
+            )
+        elif os_name == "Windows":
+            print(
+                "\n  - Re-run the Python installer, choose 'Modify', and ensure the 'tcl/tk and IDLE' option is checked.",
+                file=sys.stderr,
+            )
+
+        print("\n-------------------------------------------------", file=sys.stderr)
+        print(
+            "\nIn the meantime, you can use the command-line interface.",
             file=sys.stderr,
         )
         print(
-            "Please install it for your system (e.g., 'sudo apt-get install python3-tk' on Debian/Ubuntu).",
+            "Example: requirements-resolver --files requirements1.txt requirements2.txt",
             file=sys.stderr,
         )
         sys.exit(1)
-    app = RequirementsResolverUI(backend)
-    app.mainloop()
-
-
-def is_tkinter_installed():
-    """Checks if the tkinter module is available."""
-    try:
-        import tkinter  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
 
 
 if __name__ == "__main__":
